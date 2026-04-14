@@ -66,6 +66,10 @@ function App() {
   const [music, setMusic] = useState([])
   const [albums, setAlbums] = useState([])
   const [albumDetail, setAlbumDetail] = useState(null)
+  const [playlists, setPlaylists] = useState([])
+  const [playlistDetail, setPlaylistDetail] = useState(null)
+  const [nowPlaying, setNowPlaying] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const [loginForm, setLoginForm] = useState({ input: '', password: '' })
   const [registerForm, setRegisterForm] =
@@ -73,6 +77,8 @@ function App() {
   const [uploadForm, setUploadForm] = useState({ title: '', musicFile: null, posterFile: null })
   const [albumForm, setAlbumForm] =
     useState({ title: '', tracks: '', posterFile: null })
+  const [playlistForm, setPlaylistForm] =
+    useState({ title: '', musics: '' })
 
   const currentRole = useMemo(() => normalizeRole(user?.role), [user])
   const isArtist = currentRole === 'artist'
@@ -123,7 +129,8 @@ function App() {
   const loadMusic = async () => {
     setStatus({ text: 'Loading music…', type: 'info' })
     try {
-      const res = await authorizedFetch(token, `${API_ROOT}/music`, { method: 'GET' })
+      const query = searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ''
+      const res = await authorizedFetch(token, `${API_ROOT}/music${query}`, { method: 'GET' })
       const body = await safeJson(res)
       if (!res.ok) throw new Error(body.message || 'Failed to load music')
       setMusic(body.music || [])
@@ -152,6 +159,24 @@ function App() {
     }
   }
 
+  const loadPlaylists = async () => {
+    if (!user) {
+      setPlaylists([])
+      return
+    }
+    setStatus({ text: 'Loading playlists…', type: 'info' })
+    try {
+      const res = await authorizedFetch(token, `${API_ROOT}/music/playlist`, { method: 'GET' })
+      const body = await safeJson(res)
+      if (!res.ok) throw new Error(body.message || 'Failed to load playlists')
+      setPlaylists(body.playlists || [])
+      setStatus({ text: 'Loaded playlists.', type: 'success' })
+    } catch (err) {
+      console.error('Failed to load playlists:', err)
+      setStatus({ text: err.message || 'Failed to load playlists', type: 'error' })
+    }
+  }
+
   const loadAlbumDetails = async (albumId) => {
     setStatus({ text: 'Loading album…', type: 'info' })
     let id = albumId;
@@ -172,6 +197,143 @@ function App() {
       setAlbumDetail(null)
       setStatus({ text: err.message || 'Failed to load album', type: 'error' })
     }
+  }
+
+  const searchMusic = async () => {
+    await loadMusic()
+  }
+
+  const likeMusic = async (musicId) => {
+    if (!isLoggedIn) {
+      setStatus({ text: 'Login to like tracks.', type: 'error' })
+      return
+    }
+
+    try {
+      const res = await authorizedFetch(token, `${API_ROOT}/music/${musicId}/like`, {
+        method: 'POST',
+      })
+      const body = await safeJson(res)
+      if (!res.ok) throw new Error(body.message || 'Failed to like music')
+
+      setMusic((prev) =>
+        prev.map((track) =>
+          (track._id || track.id) === musicId
+            ? { ...track, likes: body.likes, isLiked: body.isLiked }
+            : track
+        )
+      )
+      if (albumDetail) {
+        setAlbumDetail((prev) => ({
+          ...prev,
+          tracks: prev.tracks.map((track) =>
+            (track._id || track.id) === musicId
+              ? { ...track, likes: body.likes, isLiked: body.isLiked }
+              : track
+          ),
+        }))
+      }
+      setStatus({ text: body.message || 'Updated like status.', type: 'success' })
+    } catch (err) {
+      if (err.message?.toLowerCase().includes('unauthorized')) {
+        handleAuthError('Login required to like tracks')
+        return
+      }
+      setStatus({ text: err.message || 'Failed to like track', type: 'error' })
+    }
+  }
+
+  const createPlaylist = async (event) => {
+    event.preventDefault()
+    if (!playlistForm.title) {
+      setStatus({ text: 'Playlist title is required.', type: 'error' })
+      return
+    }
+
+    setStatus({ text: 'Creating playlist…', type: 'info' })
+    try {
+      const res = await authorizedFetch(token, `${API_ROOT}/music/playlist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: playlistForm.title, musics: playlistForm.musics }),
+      })
+      const body = await safeJson(res)
+      if (!res.ok) throw new Error(body.message || 'Failed to create playlist')
+      setPlaylistForm({ title: '', musics: '' })
+      loadPlaylists()
+      setStatus({ text: 'Playlist created.', type: 'success' })
+    } catch (err) {
+      setStatus({ text: err.message || 'Failed to create playlist', type: 'error' })
+    }
+  }
+
+  const addTrackToPlaylist = async (musicId) => {
+    if (!isLoggedIn) {
+      setStatus({ text: 'Login to add to a playlist.', type: 'error' })
+      return
+    }
+    if (!playlists.length) {
+      setStatus({ text: 'Create a playlist first.', type: 'error' })
+      return
+    }
+
+    let selectedPlaylist = playlists[0]
+    if (playlists.length > 1) {
+      const choice = window.prompt(
+        `Enter playlist number to add track:\n${playlists
+          .map((playlist, index) => `${index + 1}. ${playlist.title}`)
+          .join('\n')}`
+      )
+      const index = Number(choice) - 1
+      if (!Number.isNaN(index) && playlists[index]) {
+        selectedPlaylist = playlists[index]
+      }
+    }
+
+    const playlistId = selectedPlaylist._id || selectedPlaylist.id
+    try {
+      const res = await authorizedFetch(token, `${API_ROOT}/music/playlist/${playlistId}/tracks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ musics: [musicId] }),
+      })
+      const body = await safeJson(res)
+      if (!res.ok) throw new Error(body.message || 'Failed to add track to playlist')
+      loadPlaylists()
+      setStatus({ text: `Added track to playlist ${body.playlist.title}.`, type: 'success' })
+    } catch (err) {
+      setStatus({ text: err.message || 'Failed to add track to playlist', type: 'error' })
+    }
+  }
+
+  const loadPlaylistDetails = async (playlistId) => {
+    if (!playlistId) return
+    setStatus({ text: 'Loading playlist…', type: 'info' })
+    try {
+      const res = await authorizedFetch(token, `${API_ROOT}/music/playlist/${playlistId}`, {
+        method: 'GET',
+      })
+      const body = await safeJson(res)
+      if (!res.ok) throw new Error(body.message || 'Failed to load playlist')
+      setPlaylistDetail(body.playlist)
+      setStatus({ text: 'Playlist loaded.', type: 'success' })
+    } catch (err) {
+      setPlaylistDetail(null)
+      setStatus({ text: err.message || 'Failed to load playlist', type: 'error' })
+    }
+  }
+
+  const clearPlaylistDetail = () => {
+    setPlaylistDetail(null)
+  }
+
+  const setNowPlayingTrack = async (track) => {
+    setNowPlaying(track)
+    setStatus({ text: `Now playing: ${track.title || 'Untitled'}`, type: 'success' })
+  }
+
+  const handlePlaylistCreateAndRefresh = async () => {
+    await loadPlaylists()
   }
 
   const submitUpload = async (event) => {
@@ -280,6 +442,7 @@ function App() {
       setView('home')
       loadMusic()
       loadAlbums()
+      loadPlaylists()
     } catch (err) {
       setStatus({ text: err.message || 'Login failed', type: 'error' })
     }
@@ -314,6 +477,7 @@ function App() {
       setView('home')
       loadMusic()
       loadAlbums()
+      loadPlaylists()
     } catch (err) {
       setStatus({ text: err.message || 'Registration failed', type: 'error' })
     }
@@ -327,6 +491,8 @@ function App() {
     }
     setToken('')
     setUser(null)
+    setPlaylists([])
+    setPlaylistDetail(null)
     setStatus({ text: 'Logged out.', type: 'success' })
     setView('login')
   }
@@ -334,6 +500,9 @@ function App() {
   useEffect(() => {
     loadMusic()
     loadAlbums()
+    if (user) {
+      loadPlaylists()
+    }
   }, [])
 
   const formatUserRole = () => {
@@ -361,14 +530,30 @@ function App() {
             </p>
             <div className="music-actions">
               {musicItem.uri ? (
-                <a
-                  href={formatLink(musicItem.uri)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="play-link"
+                <button
+                  type="button"
+                  className="secondary play-button"
+                  onClick={() => setNowPlayingTrack(musicItem)}
                 >
                   ▶ Play
-                </a>
+                </button>
+              ) : null}
+              <span className="track-badge">{musicItem.likes || 0} likes</span>
+              {isLoggedIn ? (
+                <button
+                  className={`secondary ${musicItem.isLiked ? 'liked' : ''}`}
+                  onClick={() => likeMusic(id)}
+                >
+                  {musicItem.isLiked ? 'Unlike' : 'Like'}
+                </button>
+              ) : null}
+              {isLoggedIn ? (
+                <button
+                  className="secondary add-to-album"
+                  onClick={() => addTrackToPlaylist(id)}
+                >
+                  Add to playlist
+                </button>
               ) : null}
               {isArtist ? (
                 <button
@@ -427,7 +612,7 @@ function App() {
   const renderAlbumDetail = () => {
     if (!albumDetail) return null
 
-    const tracks = albumDetail.musics || []
+    const tracks = albumDetail.tracks || albumDetail.musics || []
 
     return (
       <div className="card" style={{ marginTop: 20 }}>
@@ -472,17 +657,21 @@ function App() {
                     <p>
                       <strong>By:</strong> {artistName}
                     </p>
+                    {track.uri ? (
+                      <audio controls src={formatLink(track.uri)} style={{ width: '100%', marginTop: 10 }}>
+                        Your browser does not support the audio element.
+                      </audio>
+                    ) : null}
                   </div>
                   <div className="music-actions">
-                    {track.uri ? (
-                      <a
-                        href={formatLink(track.uri)}
-                        className="play-link"
-                        target="_blank"
-                        rel="noreferrer"
+                    <span className="track-badge">{track.likes || 0} likes</span>
+                    {isLoggedIn ? (
+                      <button
+                        className={`secondary ${track.isLiked ? 'liked' : ''}`}
+                        onClick={() => likeMusic(track._id || track.id)}
                       >
-                        ▶ Play
-                      </a>
+                        {track.isLiked ? 'Unlike' : 'Like'}
+                      </button>
                     ) : null}
                   </div>
                 </div>
@@ -502,6 +691,7 @@ function App() {
   const viewNavItems = [
     { id: 'home', label: 'Home', visible: true },
     { id: 'upload', label: 'Upload', visible: isArtist },
+    { id: 'playlists', label: 'Playlists', visible: isLoggedIn },
     { id: 'login', label: 'Login', visible: !isLoggedIn },
   ]
 
@@ -547,6 +737,27 @@ function App() {
             ))}
         </nav>
 
+        <div className="sidebar__preview">
+          <h3>Playlist preview</h3>
+          {playlists.length ? (
+            <div className="preview-list">
+              {playlists.slice(0, 4).map((playlist) => (
+                <button
+                  key={playlist._id || playlist.id}
+                  type="button"
+                  className="preview-item"
+                  onClick={() => loadPlaylistDetails(playlist._id || playlist.id)}
+                >
+                  <strong>{playlist.title || 'Untitled'}</strong>
+                  <span>{(playlist.musics?.length || 0) + ' tracks'}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="sidebar__hint">No playlists yet.</p>
+          )}
+        </div>
+
         <div className="sidebar__footer">
           {isLoggedIn ? (
             <button className="nav-item" style={{ width: '100%' }} onClick={logout}>
@@ -568,6 +779,35 @@ function App() {
           </div>
         </header>
 
+        {nowPlaying ? (
+          <section className="now-playing-card">
+            <div className="now-playing-info">
+              {nowPlaying.poster ? (
+                <img
+                  className="now-playing-cover"
+                  src={formatLink(nowPlaying.poster)}
+                  alt={nowPlaying.title || 'cover'}
+                />
+              ) : null}
+              <div className="now-playing-meta">
+                <h3>{nowPlaying.title || 'Now Playing'}</h3>
+                <p>{nowPlaying.artist?.username || nowPlaying.artist || 'Unknown Artist'}</p>
+                <p className="hint">Press stop or choose another track to replace.</p>
+              </div>
+            </div>
+            <div className="now-playing-actions">
+              {nowPlaying.uri ? (
+                <audio controls className="now-playing-audio" src={formatLink(nowPlaying.uri)}>
+                  Your browser does not support the audio element.
+                </audio>
+              ) : null}
+              <button className="secondary" onClick={() => setNowPlaying(null)}>
+                Stop
+              </button>
+            </div>
+          </section>
+        ) : null}
+
         <div className="view">
           {view === 'home' ? (
             <>
@@ -576,6 +816,19 @@ function App() {
                 <button className="secondary" onClick={loadMusic}>
                   Refresh
                 </button>
+              </div>
+              <div className="card" style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search tracks by title"
+                    style={{ flex: 1, minWidth: 220 }}
+                  />
+                  <button className="secondary" onClick={searchMusic}>
+                    Search
+                  </button>
+                </div>
               </div>
               <div className="card">
                 <div className="list">
@@ -599,6 +852,88 @@ function App() {
                 </div>
                 {renderAlbumDetail()}
               </div>
+            </>
+          ) : null}
+
+          {view === 'playlists' ? (
+            <>
+              <h2 className="view-title">Playlists</h2>
+              <div className="card" style={{ marginBottom: 24 }}>
+                <h3>Create a playlist</h3>
+                <form className="auth-form" onSubmit={createPlaylist}>
+                  <input
+                    value={playlistForm.title}
+                    onChange={(e) => setPlaylistForm((p) => ({ ...p, title: e.target.value }))}
+                    placeholder="Playlist title"
+                  />
+                  <textarea
+                    value={playlistForm.musics}
+                    onChange={(e) => setPlaylistForm((p) => ({ ...p, musics: e.target.value }))}
+                    placeholder="Track IDs (comma separated, optional)"
+                    rows={3}
+                    style={{ resize: 'vertical' }}
+                  />
+                  <button type="submit" className="secondary">
+                    Create playlist
+                  </button>
+                </form>
+              </div>
+              <div className="card">
+                <div className="list">
+                  {playlists.map((playlist) => (
+                    <div key={playlist._id || playlist.id} className="card-item">
+                      <h3>{playlist.title || 'Untitled Playlist'}</h3>
+                      <p>
+                        <strong>Tracks:</strong> {playlist.musics?.length || 0}
+                      </p>
+                      <div className="music-actions">
+                        <button
+                          className="secondary"
+                          onClick={() => loadPlaylistDetails(playlist._id || playlist.id)}
+                        >
+                          View playlist
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {!playlists.length ? (
+                    <p className="hint">No playlists yet. Create one to save music for later.</p>
+                  ) : null}
+                </div>
+              </div>
+              {playlistDetail ? (
+                <div className="card" style={{ marginTop: 24 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <h3>{playlistDetail.title}</h3>
+                      <p>{playlistDetail.musics?.length || 0} tracks</p>
+                    </div>
+                    <button className="secondary" onClick={clearPlaylistDetail}>
+                      Close
+                    </button>
+                  </div>
+                  <div className="list">
+                    {playlistDetail.musics?.map((track) => (
+                      <div key={track._id || track.id} className="card-item">
+                        <div style={{ flex: 1 }}>
+                          <h4>{track.title || 'Untitled'}</h4>
+                          <p>
+                            <strong>By:</strong> {track.artist?.username || track.artist || 'Unknown'}
+                          </p>
+                          {track.uri ? (
+                            <audio controls src={formatLink(track.uri)} style={{ width: '100%', marginTop: 10 }}>
+                              Your browser does not support the audio element.
+                            </audio>
+                          ) : null}
+                        </div>
+                        <div className="music-actions">
+                          <span className="track-badge">{track.likes || 0} likes</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </>
           ) : null}
 

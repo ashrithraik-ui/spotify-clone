@@ -56,4 +56,19 @@ async function authUser(req, res, next) {
   }
 }
 
-module.exports = { authArtist, authUser }
+async function authOptional(req, res, next) {
+  const token = extractToken(req);
+  if (!token) {
+    return next();
+  }
+
+  try {
+    const decoded = verifyToken(token);
+    req.user = decoded;
+  } catch (err) {
+    // ignore invalid token for public routes
+  }
+  next();
+}
+
+module.exports = { authArtist, authUser, authOptional }

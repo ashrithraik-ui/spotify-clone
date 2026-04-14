@@ -30,11 +30,18 @@ router.post(
 
 // Albums and music listings are public; they can be accessed without login.
 router.post('/album', authMiddleware.authArtist, upload.single('poster'), musicController.createAlbum);
-router.get('/', musicController.getAllMusic);
-router.get('/album', musicController.getAllAlbum);
-router.get('/albums/:albumId', musicController.getAlbumById);
+router.post('/:musicId/like', authMiddleware.authUser, musicController.likeMusic);
+
+router.post('/playlist', authMiddleware.authUser, musicController.createPlaylist);
+router.get('/playlist', authMiddleware.authUser, musicController.getUserPlaylists);
+router.get('/playlist/:playlistId', authMiddleware.authUser, musicController.getPlaylistById);
+router.post('/playlist/:playlistId/tracks', authMiddleware.authUser, musicController.addTracksToPlaylist);
+
+router.get('/', authMiddleware.authOptional, musicController.getAllMusic);
+router.get('/album', authMiddleware.authOptional, musicController.getAllAlbum);
+router.get('/albums/:albumId', authMiddleware.authOptional, musicController.getAlbumById);
 // Also support the more common singular path for detail requests.
-router.get('/album/:albumId', musicController.getAlbumById);
-router.get('/:musicId', musicController.getMusicById);
+router.get('/album/:albumId', authMiddleware.authOptional, musicController.getAlbumById);
+router.get('/:musicId', authMiddleware.authOptional, musicController.getMusicById);
 
 module.exports = router;
