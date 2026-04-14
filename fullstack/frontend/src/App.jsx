@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
 const API_ROOT = import.meta.env.VITE_API_ROOT || '/api'
@@ -44,6 +44,19 @@ const formatLink = (uri) => {
   }
 }
 
+const getPosterStyle = (musicItem) => {
+  const seed = `${musicItem._id || musicItem.id || musicItem.title || musicItem.artist || ''}`
+  let hash = 0
+  for (const char of seed) {
+    hash = (hash << 5) - hash + char.charCodeAt(0)
+    hash |= 0
+  }
+  const hue = Math.abs(hash) % 360
+  return {
+    background: `linear-gradient(135deg, hsl(${hue}, 72%, 52%), hsl(${(hue + 40) % 360}, 82%, 62%))`,
+  }
+}
+
 const authorizedFetch = (token, url, opts = {}) => {
   const headers = {
     ...(opts.headers || {}),
@@ -69,7 +82,9 @@ function App() {
   const [playlists, setPlaylists] = useState([])
   const [playlistDetail, setPlaylistDetail] = useState(null)
   const [nowPlaying, setNowPlaying] = useState(null)
+  const [expandedTrack, setExpandedTrack] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const albumDetailRef = useRef(null)
 
   const [loginForm, setLoginForm] = useState({ input: '', password: '' })
   const [registerForm, setRegisterForm] =
@@ -79,6 +94,16 @@ function App() {
     useState({ title: '', tracks: '', posterFile: null })
   const [playlistForm, setPlaylistForm] =
     useState({ title: '', musics: '' })
+  const [botMood, setBotMood] = useState('happy')
+  const [botInput, setBotInput] = useState('')
+  const [botMessages, setBotMessages] = useState([
+    {
+      sender: 'bot',
+      text: 'Hi there! I am your Music Bot. Tell me how you are feeling or ask for help with playlists.',
+    },
+  ])
+
+  const moodOptions = ['happy', 'relaxed', 'energetic', 'romantic', 'sad', 'curious']
 
   const currentRole = useMemo(() => normalizeRole(user?.role), [user])
   const isArtist = currentRole === 'artist'
@@ -191,6 +216,7 @@ function App() {
       const res = await authorizedFetch(token, `${API_ROOT}/music/albums/${id}`, { method: 'GET' })
       const body = await safeJson(res)
       if (!res.ok) throw new Error(body.message || 'Failed to load album')
+      setView('home')
       setAlbumDetail(body.album)
       setStatus({ text: 'Album loaded.', type: 'success' })
     } catch (err) {
@@ -202,6 +228,134 @@ function App() {
   const searchMusic = async () => {
     await loadMusic()
   }
+
+  const getBotResponse = (message) => {
+    const text = message.toLowerCase()
+    if (text.includes('playlist') || text.includes('enter playlist') || text.includes('how to')) {
+      return [
+        'To add a song to a playlist, open the Playlists view and create a new playlist.',
+        'Then use the Add to playlist button on any track and choose your playlist.',
+      ].join(' ')
+    }
+    if (text.includes('how are you') || text.includes('hello') || text.includes('hi')) {
+      return 'I am your music assistant! Tell me how you are feeling and I will recommend songs for your mood.'
+    }
+    if (text.includes('mood') || text.includes('feeling') || text.includes('happy') || text.includes('sad') || text.includes('energetic') || text.includes('relaxed')) {
+      return `I can suggest songs for ${botMood} vibes. Select a mood above and I will show the best matches.`
+    }
+    if (text.includes('recommend') || text.includes('suggest') || text.includes('help')) {
+      return `Sure! Based on your mood, I recommend the top matches shown in the recommendation cards below.`
+    }
+    if (text.includes('thank')) {
+      return 'You are welcome! If you have any other questions, I am here to help.'
+    }
+    return 'I am here to help with playlists, recommendations, or any music doubts. Ask me things like "how to add a song to a playlist" or "recommend songs for my mood".'
+  }
+
+  const handleBotSubmit = (event) => {
+    event.preventDefault()
+    if (!botInput.trim()) return
+
+    const userMessage = botInput.trim()
+    const botMessage = getBotResponse(userMessage)
+
+    setBotMessages((prev) => [
+      ...prev,
+      { sender: 'user', text: userMessage },
+      { sender: 'bot', text: botMessage },
+    ])
+    setBotInput('')
+  }
+
+  const moodRecommendations = useMemo(() => {
+    const pool = [...music]
+    if (!pool.length) return []
+    const moodKey = botMood.toLowerCase()
+    if (moodKey === 'energetic') {
+      return pool
+        .sort((a, b) => (b.views || 0) * 1.2 + (b.likes || 0) * 1.5 - ((a.views || 0) * 1.2 + (a.likes || 0) * 1.5))
+        .slice(0, 4)
+    }
+    if (moodKey === 'relaxed') {
+      return pool
+        .sort((a, b) => (a.likes || 0) - (b.likes || 0) + (a.views || 0) - (b.views || 0))
+        .slice(-4)
+        .reverse()
+    }
+    if (moodKey === 'romantic') {
+      const romanticMatches = pool.filter((track) =>
+        /(love|heart|baby|romance|night|dream)/i.test(track.title || '')
+      )
+      return (romanticMatches.length ? romanticMatches : pool)
+        .slice(0, 4)
+    }
+    if (moodKey === 'curious') {
+      return pool
+        .sort((a, b) => ((a.views || 0) + (a.likes || 0)) - ((b.views || 0) + (b.likes || 0)))
+        .slice(0, 4)
+        .reverse()
+    }
+    if (moodKey === 'sad') {
+      const sadMatches = pool
+        .filter((track) => /(sad|alone|tear|blue|heartbreak|goodbye|miss)/i.test(track.title || ''))
+      return (sadMatches.length ? sadMatches : pool)
+        .sort((a, b) => ((a.likes || 0) + (a.views || 0)) - ((b.likes || 0) + (b.views || 0)))
+        .slice(0, 4)
+    }
+    return pool
+      .sort((a, b) => (b.likes || 0) + (b.views || 0) - ((a.likes || 0) + (a.views || 0)))
+      .slice(0, 4)
+  }, [music, botMood])
+
+  const sortedByViews = useMemo(
+    () => [...music].sort((a, b) => (b.views || 0) - (a.views || 0)),
+    [music]
+  )
+
+  const sortedByLikes = useMemo(
+    () => [...music].sort((a, b) => (b.likes || 0) - (a.likes || 0)),
+    [music]
+  )
+
+  const topTenMusic = useMemo(
+    () =>
+      [...music]
+        .sort(
+          (a, b) =>
+            (b.views || 0) + (b.likes || 0) - ((a.views || 0) + (a.likes || 0))
+        )
+        .slice(0, 10),
+    [music]
+  )
+
+  const trendingSongs = useMemo(
+    () =>
+      [...music]
+        .sort(
+          (a, b) =>
+            (b.views || 0) * 1.2 + (b.likes || 0) * 2 - ((a.views || 0) * 1.2 + (a.likes || 0) * 2)
+        )
+        .slice(0, 5),
+    [music]
+  )
+
+  const aiRecommendations = useMemo(() => {
+    return [...music]
+      .sort((a, b) => (b.likes || 0) * 1.5 + (b.views || 0) - ((a.likes || 0) * 1.5 + (a.views || 0)))
+      .slice(0, 4)
+      .map((track) => ({
+        ...track,
+        reason:
+          (track.likes || 0) >= 10
+            ? 'Popular pick'
+            : (track.views || 0) >= 120
+            ? 'Trending now'
+            : 'Fresh suggestion',
+      }))
+  }, [music])
+
+  const mostWatched = sortedByViews[0] || null
+  const mostLiked = sortedByLikes[0] || null
 
   const likeMusic = async (musicId) => {
     if (!isLoggedIn) {
@@ -331,6 +485,17 @@ function App() {
     setNowPlaying(track)
     setStatus({ text: `Now playing: ${track.title || 'Untitled'}`, type: 'success' })
   }
+
+  const handleExpandTrack = (track) => {
+    setExpandedTrack(track)
+    setNowPlayingTrack(track)
+  }
+
+  useEffect(() => {
+    if (albumDetailRef.current) {
+      albumDetailRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [albumDetail])
 
   const handlePlaylistCreateAndRefresh = async () => {
     await loadPlaylists()
@@ -515,6 +680,8 @@ function App() {
   const renderMusicCard = (musicItem) => {
     const id = musicItem._id || musicItem.id
     const artistName = musicItem.artist?.username || musicItem.artist || 'Unknown'
+    const posterStyle = getPosterStyle(musicItem)
+    const initials = (musicItem.title || musicItem.artist || 'M').slice(0, 2).toUpperCase()
     return (
       <div key={id} className="card-item">
         <div className="music-row">
@@ -524,7 +691,11 @@ function App() {
               src={formatLink(musicItem.poster)}
               alt={musicItem.title || 'cover'}
             />
-          ) : null}
+          ) : (
+            <div className="music-poster placeholder" style={posterStyle}>
+              {initials}
+            </div>
+          )}
           <div className="music-meta">
             <h3>{musicItem.title || 'Untitled'}</h3>
             <p>
@@ -540,6 +711,13 @@ function App() {
                   ▶ Play
                 </button>
               ) : null}
+              <button
+                type="button"
+                className="secondary expand-button"
+                onClick={() => setExpandedTrack(musicItem)}
+              >
+                🔍 Enlarge
+              </button>
               <span className="track-badge">{musicItem.likes || 0} likes</span>
               {isLoggedIn ? (
                 <button
@@ -589,23 +767,53 @@ function App() {
       .slice(0, 3)
       .map((t) => (t?.title ? `${t.title}` : t._id || t))
       .join(', ')
+    const posterStyle = getPosterStyle(album)
+    const initials = (album.title || album.artist || 'AL').slice(0, 2).toUpperCase()
     return (
-      <div key={album._id} className="card-item">
-        <h3>{album.title || 'Untitled'}</h3>
-        <p>
-          <strong>ID:</strong> {album._id}
-        </p>
-        <p>
-          <strong>Artist:</strong>{' '}
-          {album.artist?.username || album.artist || 'Unknown'}
-        </p>
-        <p className="badge">
-          Tracks: {trackCount} {trackCount ? `(${trackNames}${trackCount > 3 ? '...' : ''})` : ''}
-        </p>
-        <div className="music-actions">
-          <button className="secondary view-album" onClick={() => loadAlbumDetails(album._id)}>
-            View tracks
-          </button>
+      <div
+        key={album._id}
+        className="card-item album-card-item"
+        onClick={(e) => {
+          if (!e.target.closest('button')) {
+            loadAlbumDetails(album._id)
+          }
+        }}
+        style={{ cursor: 'pointer' }}
+      >
+        {album.poster ? (
+          <img
+            className="album-poster"
+            src={formatLink(album.poster)}
+            alt={album.title || 'album cover'}
+          />
+        ) : (
+          <div className="album-poster placeholder" style={posterStyle}>
+            {initials}
+          </div>
+        )}
+        <div style={{ flex: 1 }}>
+          <h3>{album.title || 'Untitled'}</h3>
+          <p>
+            <strong>ID:</strong> {album._id}
+          </p>
+          <p>
+            <strong>Artist:</strong>{' '}
+            {album.artist?.username || album.artist || 'Unknown'}
+          </p>
+          <p className="badge">
+            Tracks: {trackCount} {trackCount ? `(${trackNames}${trackCount > 3 ? '...' : ''})` : ''}
+          </p>
+          <div className="music-actions">
+            <button
+              className="secondary view-album"
+              onClick={(e) => {
+                e.stopPropagation()
+                loadAlbumDetails(album._id)
+              }}
+            >
+              View tracks
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -617,7 +825,7 @@ function App() {
     const tracks = albumDetail.tracks || albumDetail.musics || []
 
     return (
-      <div className="card" style={{ marginTop: 20 }}>
+      <div ref={albumDetailRef} className="card" style={{ marginTop: 20 }}>
         <div className="album-detail-header" style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
           {albumDetail.poster ? (
             <img
@@ -810,6 +1018,41 @@ function App() {
           </section>
         ) : null}
 
+        {expandedTrack ? (
+          <section className="expanded-track-modal" role="dialog" aria-modal="true">
+            <div className="expanded-track-card">
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setExpandedTrack(null)}
+              >
+                ✕
+              </button>
+              {expandedTrack.poster ? (
+                <img
+                  className="expanded-cover"
+                  src={formatLink(expandedTrack.poster)}
+                  alt={expandedTrack.title || 'cover'}
+                />
+              ) : (
+                <div className="expanded-cover placeholder" style={getPosterStyle(expandedTrack)}>
+                  {(expandedTrack.title || expandedTrack.artist || 'M').slice(0, 2).toUpperCase()}
+                </div>
+              )}
+              <div className="expanded-track-meta">
+                <h3>{expandedTrack.title || 'Untitled'}</h3>
+                <p>{expandedTrack.artist?.username || expandedTrack.artist || 'Unknown artist'}</p>
+                <p className="hint">{(expandedTrack.views || 0).toLocaleString()} views • {(expandedTrack.likes || 0).toLocaleString()} likes</p>
+                {expandedTrack.uri ? (
+                  <audio controls src={formatLink(expandedTrack.uri)} style={{ width: '100%', marginTop: 14 }}>
+                    Your browser does not support the audio element.
+                  </audio>
+                ) : null}
+              </div>
+            </div>
+          </section>
+        ) : null}
+
         <div className="view">
           {view === 'home' ? (
             <>
@@ -832,8 +1075,151 @@ function App() {
                   </button>
                 </div>
               </div>
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <h3>Most Watched</h3>
+                  {mostWatched ? (
+                    <>
+                      <strong>{mostWatched.title || 'Untitled'}</strong>
+                      <p>{mostWatched.artist?.username || mostWatched.artist || 'Unknown artist'}</p>
+                      <p>{(mostWatched.views || 0).toLocaleString()} views</p>
+                    </>
+                  ) : (
+                    <p className="hint">No data yet.</p>
+                  )}
+                </div>
+                <div className="stat-card">
+                  <h3>Most Liked</h3>
+                  {mostLiked ? (
+                    <>
+                      <strong>{mostLiked.title || 'Untitled'}</strong>
+                      <p>{mostLiked.artist?.username || mostLiked.artist || 'Unknown artist'}</p>
+                      <p>{(mostLiked.likes || 0).toLocaleString()} likes</p>
+                    </>
+                  ) : (
+                    <p className="hint">No data yet.</p>
+                  )}
+                </div>
+                <div className="stat-card">
+                  <h3>Top 10 Music</h3>
+                  {topTenMusic.length ? (
+                    <ol className="top-ten-list">
+                      {topTenMusic.map((track, index) => (
+                        <li key={track._id || track.id || index}>
+                          {track.title || 'Untitled'}
+                          <span>{(track.views || 0) + (track.likes || 0)} pts</span>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="hint">No tracks yet.</p>
+                  )}
+                </div>
+              </div>
+              <div className="card trending-card">
+                <div className="section-header">
+                  <h3 className="view-title">Trending Songs</h3>
+                  <button className="secondary" onClick={loadMusic}>
+                    Refresh
+                  </button>
+                </div>
+                {trendingSongs.length ? (
+                  <div className="trending-row">
+                    {trendingSongs.map((track) => {
+                      const id = track._id || track.id
+                      const posterStyle = getPosterStyle(track)
+                      const initials = (track.title || track.artist || 'M').slice(0, 2).toUpperCase()
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          className="trending-item"
+                          onClick={() => handleExpandTrack(track)}
+                        >
+                          {track.poster ? (
+                            <img
+                              className="trending-cover"
+                              src={formatLink(track.poster)}
+                              alt={track.title || 'cover'}
+                            />
+                          ) : (
+                            <div className="trending-cover placeholder" style={posterStyle}>
+                              {initials}
+                            </div>
+                          )}
+                          <div>
+                            <strong>{track.title || 'Untitled'}</strong>
+                            <p>{track.artist?.username || track.artist || 'Unknown'}</p>
+                            <p className="hint">{(track.views || 0).toLocaleString()} views • {(track.likes || 0).toLocaleString()} likes</p>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="hint">No trending songs available yet.</p>
+                )}
+              </div>
+
+              <div className="card ai-bot-card">
+                <div className="section-header">
+                  <h3 className="view-title">AI Music Bot</h3>
+                  <span className="ai-bot-tag">Mood-based help</span>
+                </div>
+                <div className="mood-selector">
+                  {moodOptions.map((mood) => (
+                    <button
+                      key={mood}
+                      type="button"
+                      className={`mood-button ${botMood === mood ? 'active' : ''}`}
+                      onClick={() => setBotMood(mood)}
+                    >
+                      {mood}
+                    </button>
+                  ))}
+                </div>
+                <p className="hint">Talk to the bot or choose a mood to get recommended tracks and playlist guidance.</p>
+                <div className="ai-recommendations">
+                  {moodRecommendations.length ? (
+                    moodRecommendations.map((track) => (
+                      <div key={track._id || track.id} className="ai-recommendation">
+                        <div>
+                          <strong>{track.title || 'Untitled'}</strong>
+                          <p>{track.artist?.username || track.artist || 'Unknown artist'}</p>
+                        </div>
+                        <span>{`Mood match: ${botMood}`}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="hint">No recommendations yet. Try refreshing the music list.</p>
+                  )}
+                </div>
+                <div className="bot-chat-panel">
+                  <div className="bot-messages">
+                    {botMessages.map((message, index) => (
+                      <div
+                        key={index}
+                        className={`bot-message ${message.sender === 'bot' ? 'bot' : 'user'}`}
+                      >
+                        <span>{message.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <form className="bot-input-row" onSubmit={handleBotSubmit}>
+                    <input
+                      value={botInput}
+                      onChange={(e) => setBotInput(e.target.value)}
+                      placeholder="Ask the Music Bot..."
+                    />
+                    <button type="submit" className="secondary">
+                      Send
+                    </button>
+                  </form>
+                </div>
+              </div>
+
               <div className="card">
-                <div className="list">
+                <div className="list music-grid">
                   {music.map(renderMusicCard)}
                   {!music.length ? <p className="hint">No music found. Start by uploading.</p> : null}
                 </div>

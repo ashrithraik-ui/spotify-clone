@@ -453,6 +453,235 @@ a:hover {
   overflow: auto;
 }
 
+.music-grid {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  padding: 22px;
+  border-radius: 24px;
+  background: rgba(15, 24, 36, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.16);
+}
+
+.stat-card h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  letter-spacing: 0.01em;
+}
+
+.top-ten-list {
+  margin: 0;
+  padding-left: 18px;
+  color: rgba(247, 249, 255, 0.82);
+}
+
+.top-ten-list li {
+  margin-bottom: 10px;
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  line-height: 1.4;
+}
+
+.top-ten-list span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.trending-card,
+.ai-bot-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.trending-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.trending-item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.trending-item:hover {
+  transform: translateY(-1px);
+  background: rgba(29, 185, 84, 0.08);
+  border-color: rgba(29, 185, 84, 0.2);
+}
+
+.trending-cover {
+  width: 68px;
+  height: 68px;
+  border-radius: 18px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ai-bot-card {
+  display: grid;
+  gap: 14px;
+  padding: 24px;
+  background: rgba(12, 20, 30, 0.96);
+}
+
+.ai-bot-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(29, 185, 84, 0.12);
+  border: 1px solid rgba(29, 185, 84, 0.22);
+  color: #bdf6c4;
+  font-size: 12px;
+}
+
+.mood-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.mood-button {
+  padding: 9px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mood-button.active {
+  background: rgba(29, 185, 84, 0.14);
+  border-color: rgba(29, 185, 84, 0.35);
+}
+
+.bot-chat-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.bot-messages {
+  display: grid;
+  gap: 10px;
+  max-height: 240px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.bot-message {
+  max-width: 100%;
+  padding: 12px 14px;
+  border-radius: 18px;
+  line-height: 1.5;
+}
+
+.bot-message.bot {
+  justify-self: start;
+  background: rgba(29, 185, 84, 0.12);
+  border: 1px solid rgba(29, 185, 84, 0.24);
+  color: #efffed;
+}
+
+.bot-message.user {
+  justify-self: end;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text);
+}
+
+.bot-input-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+
+.bot-input-row input {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.bot-input-row button.secondary {
+  min-width: 110px;
+}
+
+.ai-recommendations {
+  display: grid;
+  gap: 12px;
+}
+
+.ai-recommendation {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ai-recommendation strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 15px;
+}
+
+.ai-recommendation span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.album-card-item {
+  align-items: center;
+}
+
+.album-poster {
+  width: 90px;
+  height: 90px;
+  border-radius: 24px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 46px rgba(0, 0, 0, 0.22);
+}
+
+.album-poster.placeholder {
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
 .card-item {
   padding: 18px;
   border-radius: 24px;
@@ -510,6 +739,15 @@ a:hover {
   box-shadow: 0 20px 46px rgba(0, 0, 0, 0.22);
 }
 
+.music-poster.placeholder {
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
 .music-meta {
   flex: 1;
 }
@@ -532,6 +770,79 @@ a:hover {
   border-radius: 999px;
   background: rgba(29, 185, 84, 0.12);
   border: 1px solid rgba(29, 185, 84, 0.24);
+}
+
+.expand-button {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.expand-button:hover {
+  background: rgba(29, 185, 84, 0.12);
+  border-color: rgba(29, 185, 84, 0.3);
+}
+
+.expanded-track-modal {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 50;
+  padding: 24px;
+}
+
+.expanded-track-card {
+  position: relative;
+  width: min(760px, 100%);
+  max-height: calc(100vh - 64px);
+  padding: 28px;
+  border-radius: 28px;
+  background: rgba(8, 12, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 40px 80px rgba(0, 0, 0, 0.45);
+  display: grid;
+  gap: 20px;
+  overflow: auto;
+}
+
+.expanded-cover {
+  width: 100%;
+  max-height: 320px;
+  border-radius: 28px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+}
+
+.expanded-cover.placeholder {
+  height: 320px;
+  display: grid;
+  place-items: center;
+  font-size: 72px;
+  letter-spacing: 0.04em;
+}
+
+.expanded-track-meta {
+  display: grid;
+  gap: 12px;
+}
+
+.modal-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+}
+
+.modal-close:hover {
+  background: rgba(255, 255, 255, 0.16);
 }
 
 button.secondary.liked {
