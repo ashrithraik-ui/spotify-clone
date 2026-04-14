@@ -430,6 +430,7 @@ function App() {
     try {
       const res = await fetch(`${API_ROOT}/auth/login`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
@@ -460,6 +461,7 @@ function App() {
     try {
       const res = await fetch(`${API_ROOT}/auth/register`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: registerForm.username,
